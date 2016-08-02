@@ -3,5 +3,9 @@ name = "mpsc"
 version = "0.1.0"
 authors = ["Alexander Polakov <apolyakov@beget.ru>"]
 
-[dependencies]
-parking_lot = "0.2.6"
+[dependencies.parking_lot]
+version = "0.2.6"
+features = ["nightly"]
+
+[dev-dependencies]
+rand="*"
