@@ -266,7 +266,7 @@ mod tests {
             match queue.peek() {
                 Some(vec) => match &**vec {
                     // Note that `pop` is not allowed here due to borrow
-                    [1] => {}
+                    &[1] => {}
                     _ => return
                 },
                 None => unreachable!()
