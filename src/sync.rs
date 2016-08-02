@@ -38,6 +38,7 @@ use self::Blocker::*;
 
 use std::vec::Vec;
 use core::mem;
+use core::cmp;
 use core::ptr;
 
 use std::sync::atomic::{Ordering, AtomicUsize};
@@ -98,7 +99,7 @@ unsafe impl Send for Node {}
 
 /// A simple ring-buffer
 struct Buffer<T> {
-    buf: Vec<Option<T>>,
+    buf: Vec<T>,
     start: usize,
     size: usize,
 }
@@ -147,11 +148,7 @@ impl<T> Packet<T> {
                     head: ptr::null_mut(),
                     tail: ptr::null_mut(),
                 },
-                buf: Buffer {
-                    buf: (0..cap + if cap == 0 {1} else {0}).map(|_| None).collect(),
-                    start: 0,
-                    size: 0,
-                },
+                buf: Buffer::new(if cap == 0 {1} else {cap}),
             }),
         }
     }
@@ -336,9 +333,9 @@ impl<T> Packet<T> {
         // needs to be careful to destroy the data *outside* of the lock to
         // prevent deadlock.
         let _data = if guard.cap != 0 {
-            mem::replace(&mut guard.buf.buf, Vec::new())
+            mem::replace(&mut guard.buf, Buffer::new(0))
         } else {
-            Vec::new()
+            Buffer::new(0)
         };
         let mut queue = mem::replace(&mut guard.queue, Queue {
             head: ptr::null_mut(),
@@ -418,23 +415,44 @@ impl<T> Drop for Packet<T> {
 ////////////////////////////////////////////////////////////////////////////////
 
 impl<T> Buffer<T> {
+    fn new(cap: usize) -> Self {
+        let mut buf = Vec::with_capacity(cap);
+        unsafe { buf.set_len(cap); }
+        Buffer {
+            buf: buf,
+            start: 0,
+            size: 0,
+        }
+    }
+
     fn enqueue(&mut self, t: T) {
         let pos = (self.start + self.size) % self.buf.len();
         self.size += 1;
-        let prev = mem::replace(&mut self.buf[pos], Some(t));
-        assert!(prev.is_none());
+        unsafe { ptr::write(self.buf.as_mut_ptr().offset(pos as isize), t); }
     }
 
     fn dequeue(&mut self) -> T {
         let start = self.start;
         self.size -= 1;
         self.start = (self.start + 1) % self.buf.len();
-        let result = &mut self.buf[start];
-        result.take().unwrap()
+        unsafe { ptr::read(self.buf.as_ptr().offset(start as isize)) }
     }
 
     fn size(&self) -> usize { self.size }
     fn cap(&self) -> usize { self.buf.len() }
+}
+
+impl<T> Drop for Buffer<T> {
+    fn drop(&mut self) {
+        unsafe {
+            let len = self.buf.len();
+            if len != 0 {
+                ptr::drop_in_place(&mut self.buf[self.start..cmp::min(self.start + self.size, len)]);
+                ptr::drop_in_place(&mut self.buf[0..self.size % len]);
+                self.buf.set_len(0);
+            }
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
