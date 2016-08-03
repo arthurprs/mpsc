@@ -122,7 +122,7 @@ impl<T> Queue<T> {
             // Acquire a node (which either uses a cached one or allocates a new
             // one), and then append this to the 'head' node.
             let n = self.alloc();
-            assert!((*n).value.is_none());
+            debug_assert!((*n).value.is_none());
             (*n).value = Some(t);
             (*n).next.store(ptr::null_mut(), Ordering::Relaxed);
             (**self.head.get()).next.store(n, Ordering::Release);
@@ -172,7 +172,7 @@ impl<T> Queue<T> {
             let tail = *self.tail.get();
             let next = (*tail).next.load(Ordering::Acquire);
             if next.is_null() { return None }
-            assert!((*next).value.is_some());
+            debug_assert!((*next).value.is_some());
             let ret = (*next).value.take();
 
             *self.tail.get() = next;

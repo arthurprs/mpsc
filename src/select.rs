@@ -254,7 +254,7 @@ impl Select {
             }
 
             // We must have found a ready receiver
-            assert!(ready_id != usize::MAX);
+            debug_assert!(ready_id != usize::MAX);
             return ready_id;
         }
     }
@@ -288,7 +288,7 @@ impl<'rx, T: Send> Handle<'rx, T> {
             selector.tail = me;
         } else {
             (*me).prev = selector.tail;
-            assert!((*me).next.is_null());
+            debug_assert!((*me).next.is_null());
             (*selector.tail).next = me;
             selector.tail = me;
         }
@@ -305,13 +305,13 @@ impl<'rx, T: Send> Handle<'rx, T> {
         let me = self as *mut Handle<'rx, T> as *mut Handle<'static, ()>;
 
         if self.prev.is_null() {
-            assert_eq!(selector.head, me);
+            debug_assert!(selector.head == me);
             selector.head = self.next;
         } else {
             (*self.prev).next = self.next;
         }
         if self.next.is_null() {
-            assert_eq!(selector.tail, me);
+            debug_assert!(selector.tail == me);
             selector.tail = self.prev;
         } else {
             (*self.next).prev = self.prev;
@@ -327,8 +327,8 @@ impl<'rx, T: Send> Handle<'rx, T> {
 impl Drop for Select {
     fn drop(&mut self) {
         unsafe {
-            assert!((&*self.inner.get()).head.is_null());
-            assert!((&*self.inner.get()).tail.is_null());
+            debug_assert!((&*self.inner.get()).head.is_null());
+            debug_assert!((&*self.inner.get()).tail.is_null());
         }
     }
 }

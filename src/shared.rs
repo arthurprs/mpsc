@@ -97,8 +97,8 @@ impl<T> Packet<T> {
                            token: Option<SignalToken>,
                            guard: MutexGuard<()>) {
         token.map(|token| {
-            assert_eq!(self.cnt.load(Ordering::SeqCst), 0);
-            assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+            debug_assert!(self.cnt.load(Ordering::SeqCst) == 0);
+            debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
             self.to_wake.store(unsafe { token.cast_to_usize() }, Ordering::SeqCst);
             self.cnt.store(-1, Ordering::SeqCst);
 
@@ -238,7 +238,7 @@ impl<T> Packet<T> {
     // Essentially the exact same thing as the stream decrement function.
     // Returns true if blocking should proceed.
     fn decrement(&mut self, token: SignalToken) -> StartResult {
-        assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+        debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
         let ptr = unsafe { token.cast_to_usize() };
         self.to_wake.store(ptr, Ordering::SeqCst);
 
@@ -250,7 +250,7 @@ impl<T> Packet<T> {
             // If we factor in our steals and notice that the channel has no
             // data, we successfully sleep
             n => {
-                assert!(n >= 0);
+                debug_assert!(n >= 0);
                 if n - steals <= 0 { return Installed }
             }
         }
@@ -306,7 +306,7 @@ impl<T> Packet<T> {
                             self.bump(n - m);
                         }
                     }
-                    assert!(self.steals >= 0);
+                    debug_assert!(self.steals >= 0);
                 }
                 self.steals += 1;
                 Ok(data)
@@ -349,7 +349,7 @@ impl<T> Packet<T> {
         match self.cnt.swap(DISCONNECTED, Ordering::SeqCst) {
             -1 => { self.take_to_wake().signal(); }
             DISCONNECTED => {}
-            n => { assert!(n >= 0); }
+            n => { debug_assert!(n >= 0); }
         }
     }
 
@@ -377,7 +377,7 @@ impl<T> Packet<T> {
     fn take_to_wake(&mut self) -> SignalToken {
         let ptr = self.to_wake.load(Ordering::SeqCst);
         self.to_wake.store(0, Ordering::SeqCst);
-        assert!(ptr != 0);
+        debug_assert!(ptr != 0);
         unsafe { SignalToken::cast_from_usize(ptr) }
     }
 
@@ -416,7 +416,7 @@ impl<T> Packet<T> {
             Installed => Installed,
             Abort => {
                 let prev = self.bump(1);
-                assert!(prev == DISCONNECTED || prev >= 0);
+                debug_assert!(prev == DISCONNECTED || prev >= 0);
                 Abort
             }
         }
@@ -449,11 +449,11 @@ impl<T> Packet<T> {
         let prev = self.bump(steals + 1);
 
         if prev == DISCONNECTED {
-            assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+            debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
             true
         } else {
             let cur = prev + steals + 1;
-            assert!(cur >= 0);
+            debug_assert!(cur >= 0);
             if prev < 0 {
                 drop(self.take_to_wake());
             } else {
@@ -464,7 +464,7 @@ impl<T> Packet<T> {
             // if the number of steals is -1, it was the pre-emptive -1 steal
             // count from when we inherited a blocker. This is fine because
             // we're just going to overwrite it with a real value.
-            assert!(self.steals == 0 || self.steals == -1);
+            debug_assert!(self.steals == 0 || self.steals == -1);
             self.steals = steals;
             prev >= 0
         }
@@ -477,8 +477,8 @@ impl<T> Drop for Packet<T> {
         // disconnection, but also a proper fence before the read of
         // `to_wake`, so this assert cannot be removed with also removing
         // the `to_wake` assert.
-        assert_eq!(self.cnt.load(Ordering::SeqCst), DISCONNECTED);
-        assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
-        assert_eq!(self.channels.load(Ordering::SeqCst), 0);
+        debug_assert!(self.cnt.load(Ordering::SeqCst) == DISCONNECTED);
+        debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
+        debug_assert!(self.channels.load(Ordering::SeqCst) == 0);
     }
 }

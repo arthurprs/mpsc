@@ -125,7 +125,7 @@ impl<T> Packet<T> {
                 self.cnt.store(DISCONNECTED, Ordering::SeqCst);
                 let first = self.queue.pop();
                 let second = self.queue.pop();
-                assert!(second.is_none());
+                debug_assert!(second.is_none());
 
                 match first {
                     Some(..) => UpSuccess,  // we failed to send the data
@@ -135,7 +135,7 @@ impl<T> Packet<T> {
 
             // Otherwise we just sent some data on a non-waiting queue, so just
             // make sure the world is sane and carry on!
-            n => { assert!(n >= 0); UpSuccess }
+            n => { debug_assert!(n >= 0); UpSuccess }
         }
     }
 
@@ -143,7 +143,7 @@ impl<T> Packet<T> {
     fn take_to_wake(&mut self) -> SignalToken {
         let ptr = self.to_wake.load(Ordering::SeqCst);
         self.to_wake.store(0, Ordering::SeqCst);
-        assert!(ptr != 0);
+        debug_assert!(ptr != 0);
         unsafe { SignalToken::cast_from_usize(ptr) }
     }
 
@@ -151,7 +151,7 @@ impl<T> Packet<T> {
     // back if it shouldn't sleep. Note that this is the location where we take
     // steals into account.
     fn decrement(&mut self, token: SignalToken) -> Result<(), SignalToken> {
-        assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+        debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
         let ptr = unsafe { token.cast_to_usize() };
         self.to_wake.store(ptr, Ordering::SeqCst);
 
@@ -163,7 +163,7 @@ impl<T> Packet<T> {
             // If we factor in our steals and notice that the channel has no
             // data, we successfully sleep
             n => {
-                assert!(n >= 0);
+                debug_assert!(n >= 0);
                 if n - steals <= 0 { return Ok(()) }
             }
         }
@@ -225,7 +225,7 @@ impl<T> Packet<T> {
                             self.bump(n - m);
                         }
                     }
-                    assert!(self.steals >= 0);
+                    debug_assert!(self.steals >= 0);
                 }
                 self.steals += 1;
                 match data {
@@ -267,7 +267,7 @@ impl<T> Packet<T> {
         match self.cnt.swap(DISCONNECTED, Ordering::SeqCst) {
             -1 => { self.take_to_wake().signal(); }
             DISCONNECTED => {}
-            n => { assert!(n >= 0); }
+            n => { debug_assert!(n >= 0); }
         }
     }
 
@@ -372,7 +372,7 @@ impl<T> Packet<T> {
                 // Undo our decrement above, and we should be guaranteed that the
                 // previous value is positive because we're not going to sleep
                 let prev = self.bump(1);
-                assert!(prev == DISCONNECTED || prev >= 0);
+                debug_assert!(prev == DISCONNECTED || prev >= 0);
                 ret
             }
         }
@@ -395,8 +395,8 @@ impl<T> Packet<T> {
         // this end. This is fine because we know it's a small bounded windows
         // of time until the data is actually sent.
         if was_upgrade {
-            assert_eq!(self.steals, 0);
-            assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+            debug_assert!(self.steals == 0);
+            debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
             return Ok(true)
         }
 
@@ -409,11 +409,11 @@ impl<T> Packet<T> {
         // If we were previously disconnected, then we know for sure that there
         // is no thread in to_wake, so just keep going
         let has_data = if prev == DISCONNECTED {
-            assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+            debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
             true // there is data, that data is that we're disconnected
         } else {
             let cur = prev + steals + 1;
-            assert!(cur >= 0);
+            debug_assert!(cur >= 0);
 
             // If the previous count was negative, then we just made things go
             // positive, hence we passed the -1 boundary and we're responsible
@@ -436,7 +436,7 @@ impl<T> Packet<T> {
                     thread::yield_now();
                 }
             }
-            assert_eq!(self.steals, 0);
+            debug_assert!(self.steals == 0);
             self.steals = steals;
 
             // if we were previously positive, then there's surely data to
@@ -470,7 +470,7 @@ impl<T> Drop for Packet<T> {
         // disconnection, but also a proper fence before the read of
         // `to_wake`, so this assert cannot be removed with also removing
         // the `to_wake` assert.
-        assert_eq!(self.cnt.load(Ordering::SeqCst), DISCONNECTED);
-        assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
+        debug_assert!(self.cnt.load(Ordering::SeqCst) == DISCONNECTED);
+        debug_assert!(self.to_wake.load(Ordering::SeqCst) == 0);
     }
 }

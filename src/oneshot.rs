@@ -101,7 +101,7 @@ impl<T> Packet<T> {
             NothingSent => {}
             _ => panic!("sending on a oneshot that's already sent on "),
         }
-        assert!(self.data.is_none());
+        debug_assert!(self.data.is_none());
         self.data = Some(t);
         self.upgrade = SendUsed;
 
@@ -367,6 +367,6 @@ impl<T> Packet<T> {
 
 impl<T> Drop for Packet<T> {
     fn drop(&mut self) {
-        assert_eq!(self.state.load(Ordering::SeqCst), DISCONNECTED);
+        debug_assert!(self.state.load(Ordering::SeqCst) == DISCONNECTED);
     }
 }

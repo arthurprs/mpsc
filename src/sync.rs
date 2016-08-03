@@ -182,7 +182,7 @@ impl<T> Packet<T> {
             // to hand back our data.
             NoneBlocked if guard.cap == 0 => {
                 let mut canceled = false;
-                assert!(guard.canceled.is_none());
+                debug_assert!(guard.canceled.is_none());
                 guard.canceled = Some(unsafe { mem::transmute(&mut canceled) });
                 let mut guard = wait(&self.lock, guard, BlockedSender);
                 if canceled {Err(guard.buf.dequeue())} else {Ok(())}
@@ -220,7 +220,7 @@ impl<T> Packet<T> {
             // If the buffer has some space and the capacity isn't 0, then we
             // just enqueue the data for later retrieval, ensuring to wake up
             // any blocked receiver if there is one.
-            assert!(guard.buf.size() < guard.buf.cap());
+            debug_assert!(guard.buf.size() < guard.buf.cap());
             guard.buf.enqueue(t);
             match mem::replace(&mut guard.blocker, NoneBlocked) {
                 BlockedReceiver(token) => wakeup(token, guard),
@@ -248,7 +248,7 @@ impl<T> Packet<T> {
         if guard.disconnected && guard.buf.size() == 0 { return Err(()) }
 
         // Pick up the data, wake up our neighbors, and carry on
-        assert!(guard.buf.size() > 0);
+        debug_assert!(guard.buf.size() > 0);
         let ret = guard.buf.dequeue();
         self.wakeup_senders(waited, guard);
         Ok(ret)
@@ -402,10 +402,10 @@ impl<T> Packet<T> {
 
 impl<T> Drop for Packet<T> {
     fn drop(&mut self) {
-        assert_eq!(self.channels.load(Ordering::SeqCst), 0);
+        debug_assert!(self.channels.load(Ordering::SeqCst) == 0);
         let mut guard = self.lock.lock();
-        assert!(guard.queue.dequeue().is_none());
-        assert!(guard.canceled.is_none());
+        debug_assert!(guard.queue.dequeue().is_none());
+        debug_assert!(guard.canceled.is_none());
     }
 }
 
