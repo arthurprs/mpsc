@@ -10,15 +10,14 @@
 
 //! Generic support for building blocking abstractions.
 
-use std::thread::{self, Thread};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::marker::{Sync, Send};
 use std::mem;
 use std::clone::Clone;
+use parking_lot::{park, unpark_one};
 
 struct Inner {
-    thread: Thread,
     woken: AtomicBool,
 }
 
@@ -40,7 +39,6 @@ impl !Sync for WaitToken {}
 
 pub fn tokens() -> (WaitToken, SignalToken) {
     let inner = Arc::new(Inner {
-        thread: thread::current(),
         woken: AtomicBool::new(false),
     });
     let wait_token = WaitToken {
@@ -56,7 +54,9 @@ impl SignalToken {
     pub fn signal(&self) -> bool {
         let wake = !self.inner.woken.compare_and_swap(false, true, Ordering::SeqCst);
         if wake {
-            self.inner.thread.unpark();
+            let callback = &mut |_| {
+            };
+            unsafe { unpark_one(mem::transmute_copy(self), callback); }
         }
         wake
     }
@@ -79,8 +79,15 @@ impl SignalToken {
 
 impl WaitToken {
     pub fn wait(self) {
-        while !self.inner.woken.load(Ordering::SeqCst) {
-            thread::park()
+        if !self.inner.woken.load(Ordering::SeqCst) {
+            let validate = &mut || {
+                !self.inner.woken.load(Ordering::SeqCst)
+            };
+            let before_sleep = &mut || {
+            };
+            let timed_out = &mut |_, _| {
+            };
+            unsafe { park(mem::transmute_copy(&self), validate, before_sleep, timed_out, None); }
         }
     }
 }
